@@ -13,7 +13,7 @@
 
 $info = array(
   'title' => 'MarkupPdfPager',
-  'version' => '0.1.1',
+  'version' => '0.7.1',
   'summary' => 'The module provides functions to render PDF documents page by page. It also extracts their texts and creates a search index.',
   'href' => 'https://github.com/mtwebit/MarkupPdfPager',
   'singular' => true, // contains hooks

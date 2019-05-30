@@ -59,6 +59,10 @@ class MarkupPdfPager extends WireData implements Module {
       return;
     }
 
+    if ($this->search_engine == 'solr' && !$this->solr_connect()) {
+      return;
+    }
+
     if ($this->reindex && $this->indexAll(true /* reindex all */)) {
       // clear the index all checkbox if indexAll() is successful
       wire('modules')->saveConfig('MarkupPdfPager', 'reindex', 0);
@@ -164,6 +168,29 @@ class MarkupPdfPager extends WireData implements Module {
  **********************************************************************/
 
   /**
+   * Connect to a Solr server
+   */
+  public function solr_connect() {
+    $options = array(
+      'hostname' => $this->solr_host,
+      'port'     => $this->solr_port,
+      'path'     => $this->solr_path,
+      'wt'       => 'xml',
+    );
+
+    try {
+      $client = new \SolrClient($options);
+      $solrres = $client->ping();
+    } catch (Exception $e) {
+      $this->error("ERROR: could not connect to the Solr server at {$this->solr_host}: " . $e->getMessage());
+      return false;
+    }
+    $this->message("Solr indexer successfully connected to {$this->solr_host}: " . $solrres->getRawResponse());
+    return true;
+  }
+
+
+  /**
    * Index a PDF document.
    * 
    * @param $pdfPage ProcessWire Page object (the page contains the PDF file field)
@@ -216,11 +243,11 @@ class MarkupPdfPager extends WireData implements Module {
     }
 
     $newItems = array();
-    $workDir = '/tmp/pdftotext.'.$pdfPage->id.'/';
-    mkdir($workDir);
+    $workDir = $this->config->paths->tmp.'index_'.$pdfPage->id.'/';
+    mkdir($workDir, 0755, true);
 
     // extract PDF pages
-    $command = $this->pdfseparate . ' ' . $file->filename . ' ' . $workDir . 'page-%d.pdf';
+    $command = $this->pdfseparate . ' ' . $file->filename . ' ' . $workDir . 'page-%d.pdf 2>&1';
     $this->message("Extracting PDF pages using {$command}.", Notice::debug);
     if ($task) $tasker->saveProgress($task, $taskData, false, false);
     exec($command, $exec_output, $exec_status);
@@ -247,7 +274,7 @@ class MarkupPdfPager extends WireData implements Module {
       list ($pageNum) = sscanf($pagefile, "page-%d.pdf");
       $this->message("Extracting texts from pagefile {$pagefile}.", Notice::debug);
       // TODO keep layout?
-      exec($this->pdftotext . ' -enc UTF-8 -layout ' . $workDir . $pagefile . ' ' . $workDir . 'pagetext.txt', $exec_output, $exec_status);
+      exec($this->pdftotext . ' -enc UTF-8 -layout ' . $workDir . $pagefile . ' ' . $workDir . 'pagetext.txt 2>&1', $exec_output, $exec_status);
       // exec($this->pdftotext . ' -enc UTF-8 ' . $workDir . $pagefile . ' ' . $workDir . 'pagetext.txt', $exec_output, $exec_status);
       if ($exec_status != 0) {
         $this->error("ERROR: Could not extract text from '{$file->filename}' on page {$pageNum}.");
@@ -281,7 +308,10 @@ class MarkupPdfPager extends WireData implements Module {
       $pdfPage->{$this->pdf_pageindex_field}->add($newItems);
       $this->message("Processed ".count($newItems)." pages in {$pdfPage->title}.", Notice::debug);
     }
-    rmdir($workDir);
+
+    $pdfPage->save();
+
+    exec('/bin/rm -rf '.$workDir);
 
     $taskData['task_done'] = 1;
     $this->message($file->name.' has been processed.');
@@ -324,6 +354,23 @@ class MarkupPdfPager extends WireData implements Module {
     }
     return true;
 }
+
+
+  /**
+   * Search the PDF content of pages and return the number of matching pages
+   * 
+   * @param $pageSelector - PW selector to find Pages
+   * @param $textSelector - a selector operator and a selector value to match pdf_pageindex_field repeater items
+   * @return WireArray of Pages matching the selectors
+   */
+  public function countPages($pageSelector='', $textSelector='') {
+    // Repeater i﻿tems are stored under﻿ the admi﻿n tre﻿e, ignore this fact while counting them
+    return $this->pages->count('check_access=0, template=repeater_'.$this->pdf_pageindex_field);
+    if ($pageSelector == '') $pageSelector = $this->pdf_file_field."!=''";
+    else $pageSelector .= ','.$this->pdf_file_field."!=''";
+    if ($textSelector=='') return $this->pages->count($pageSelector);
+    return $this->pages->count($pageSelector . ',' . $this->pdf_pageindex_field . '.page_text' . $textSelector);
+  }
 
   /**
    * Search PDF documents on selectable pages using a text selector and return an assoc array of page IDs and repeater items.

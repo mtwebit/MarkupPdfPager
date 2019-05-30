@@ -21,12 +21,16 @@ class MarkupPdfPagerConfig extends ModuleConfig {
       'pdftotext' => '/usr/bin/pdftotext',
       'reindex' => 0,
       'indexmissing' => 0,
+      'search_engine' => 'internal',
+      'solr_host' => 'localhost',
+      'solr_port' => 8983,
+      'solr_path' => 'solr',
     );
   }
 
   public function getInputfields() {
     $inputfields = parent::getInputfields();
-
+    
     $fieldset = $this->wire('modules')->get('InputfieldFieldset');
     $fieldset->label = __('Requirements');
 
@@ -58,18 +62,66 @@ class MarkupPdfPagerConfig extends ModuleConfig {
     }
     $fieldset->add($f);
 
+    $inputfields->add($fieldset);
+
+/********************  Search Engine settings ****************************/
+    $fieldset = $this->wire('modules')->get("InputfieldFieldset");
+    $fieldset->label = __("Search Engine configuration");
+
     $f = $this->modules->get('InputfieldSelect');
-    $f->attr('name', 'pdf_pageindex_field');
-    $f->label = 'Field that contains the search index.';
-    $f->description = __('Create a hidden repeater field that contains a page_number (Integer) and a page_text (Textarea).');
+    $f->attr('name', 'search_engine');
+    $f->label = 'Search engine.';
+    $f->description = __('Internal or Solr (if supported).');
     $f->options = array();
     $f->required = true;
     $f->columnWidth = 50;
-    foreach ($this->wire('fields') as $field) {
-      if (!$field->type instanceof FieldtypeRepeater) continue;
-      $f->addOption($field->name, $field->label);
+    $f->addOption('internal', 'Internal');
+    if (function_exists('solr_get_version')) {
+      $f->addOption('solr', 'Solr PHP '.solr_get_version());
     }
     $fieldset->add($f);
+
+// TODO this does not work
+//    if ($this->search_engine == 'solr') {
+      $f = $this->modules->get('InputfieldText');
+      $f->attr('name', 'solr_host');
+      $f->label = __('Hostname');
+      $f->description = __('Location of the Solr server.'.$this->config->search_engine);
+      $f->required = true;
+      $f->columnWidth = 50;
+      $fieldset->add($f);
+
+      $f = $this->modules->get('InputfieldText');
+      $f->attr('name', 'solr_port');
+      $f->label = __('Port');
+      $f->description = __('Port number');
+      $f->required = true;
+      $f->columnWidth = 50;
+      $fieldset->add($f);
+
+      $f = $this->modules->get('InputfieldText');
+      $f->attr('name', 'solr_path');
+      $f->label = 'Solr Path';
+      $f->description = __('Speficy the path to the solr core you would like to use.');
+      $f->required = true;
+      $f->columnWidth = 50;
+      $fieldset->add($f);
+
+//    } else {
+      $f = $this->modules->get('InputfieldSelect');
+      $f->attr('name', 'pdf_pageindex_field');
+      $f->label = 'Field that contains the internal search index.';
+      $f->description = __('Create a hidden repeater field that contains a page_number (Integer) and a page_text (Textarea).');
+      $f->options = array();
+      $f->required = true;
+      $f->columnWidth = 50;
+      foreach ($this->wire('fields') as $field) {
+        if (!$field->type instanceof FieldtypeRepeater) continue;
+        $f->addOption($field->name, $field->label);
+      }
+      $fieldset->add($f);
+//    }
+
     $inputfields->add($fieldset);
 
 /********************  Executables ****************************/
