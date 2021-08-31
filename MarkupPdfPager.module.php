@@ -13,7 +13,8 @@
  
 class MarkupPdfPager extends WireData implements Module {
   private $redirectUrl = ''; // used for temporaly redirect on page save
-  private $assetsURL ;
+  private $assetsURL;
+  private $solr_client;
 
 /***********************************************************************
  * MODULE SETUP
@@ -63,12 +64,12 @@ class MarkupPdfPager extends WireData implements Module {
       return;
     }
 
-    if ($this->reindex && $this->indexAll(true /* reindex all */)) {
+    if (false && $this->reindex && $this->indexAll(true /* reindex all */)) {
       // clear the index all checkbox if indexAll() is successful
       wire('modules')->saveConfig('MarkupPdfPager', 'reindex', 0);
     }
 
-    if ($this->indexmissing && $this->indexAll()) {
+    if (false && $this->indexmissing && $this->indexAll()) {
       // clear the index all checkbox if indexAll() is successful
       wire('modules')->saveConfig('MarkupPdfPager', 'indexmissing', 0);
     }
@@ -171,6 +172,8 @@ class MarkupPdfPager extends WireData implements Module {
    * Connect to a Solr server
    */
   public function solr_connect() {
+    return true;
+
     $options = array(
       'hostname' => $this->solr_host,
       'port'     => $this->solr_port,
@@ -179,8 +182,8 @@ class MarkupPdfPager extends WireData implements Module {
     );
 
     try {
-      $client = new \SolrClient($options);
-      $solrres = $client->ping();
+      $this->solr_client = new \SolrClient($options);
+      $solrres = $this->solr_client->ping();
     } catch (Exception $e) {
       $this->error("ERROR: could not connect to the Solr server at {$this->solr_host}: " . $e->getMessage());
       return false;
@@ -229,7 +232,115 @@ class MarkupPdfPager extends WireData implements Module {
 
     $this->message("Processing PDF file {$file->filename}.");
     // TODO $this->message("Processing PDF file {$file->name}.", Notice::debug);
-    
+
+    if (method_exists($this, 'index_'.$this->search_engine)) {
+      $method = 'index_'.$this->search_engine;
+      return $this->$method($pdfPage, $file, $task, $taskData, $params);
+    }
+
+    $this->error("Unsupported indexing service '{$this->search_engine}'.");
+    return false;
+  }
+
+  /**
+   * Index a PDF document using an internal method
+   * 
+   * @param $pdfPage ProcessWire Page object (the page contains the PDF file field)
+   * @param $file the PDF file to process
+   * @param $task the task object or false if Tasker is not available
+   * @param $taskData task data assoc array
+   * @param $params runtime paramteres, e.g. timeout, dryrun, estimation and task object
+   * @returns false on error, a result message on success
+   * The method also alters elements of the $taskData array.
+   */
+  private function index_solr($pdfPage, $file, $task, &$taskData, $params) {
+    $this->message("Solr indexing service activated on page '{$pdfPage}' for file '{$file->name}'.");
+    $mime = mime_content_type($file->filename);
+    if ($mime === false) {
+      $this->error("Solr indexing failed. Could not determine mime type.");
+      return false;
+    }
+
+
+// TODO Index each page separately to be able to get page numbers
+
+
+
+
+
+
+
+
+    // TODO For optimum performance when loading many documents, don’t call the commit command until you are done.
+    $solr_options = '&commit=true&stored=true';
+    $cfile = new \CURLFile($file->filename, $mime, $file->name);
+    $pname = urlencode($file->name);
+    $ch = curl_init("http://{$this->solr_host}:{$this->solr_port}/{$this->solr_path}/update/extract?literal.id={$pdfPage->id}&literal.name={$pname}{$solr_options}");
+    curl_setopt($ch, CURLOPT_POST, 1);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, array('myfile' => $cfile));
+    $this->message("Sending CURL request to ".curl_getinfo($ch, CURLINFO_EFFECTIVE_URL), Notice::debug);
+    $result= curl_exec ($ch);
+    if ($result === false) {
+      $this->error("Solr indexing failed. ".curl_error($ch));
+      curl_close($ch);
+      return false;
+    }
+    $this->message("Solr indexing returned [".curl_getinfo($ch, CURLINFO_RESPONSE_CODE)."] {$result}.", Notice::debug);
+    $taskData['task_done'] = 1;
+    $this->message($file->name.' has been processed.');
+    curl_close($ch);
+    return true;
+  }
+
+  /**
+   * Search PDF documents on selectable pages using a text selector and return an assoc array of page IDs and repeater items.
+   * 
+   * @param $pageSelector - PW selector to find Pages
+   * @param $textSelector - a selector operator and a selector value to match pdf_pageindex_field repeater items
+   * @return array( PageIDs array, Solr search result object)
+   */
+  public function search_solr($pageSelector, $textSelector) {
+    $this->message("Solr search started with {$textSelector}.", Notice::debug);
+    if ($textSelector == '') return array($this->pages->findIDs($pageSelector), false);
+    $filter = '';
+    if ($pageSelector != '') {
+       $pageIDs = $this->pages->findIDs($pageSelector);
+       if (!count($pageIDs)) return array(false, false);
+       $filter .= '&fq='.urlencode('id:'.implode(' OR id:', $pageIDs));
+    }
+    $hightlight = '&hightlightMultiTerm=true&hl.simple.post=<%2Fu>&hl.simple.pre=<u>&hl.fl=_text_&hl=on&q=_text_:'.urlencode($textSelector);
+    $ch = curl_init("http://{$this->solr_host}:{$this->solr_port}/{$this->solr_path}/select/?fl=id&q=_text_%3A".urlencode($textSelector).'&'.$filter.$hightlight);
+    curl_setopt($ch, CURLOPT_POST, 1);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+    $this->message("Sending CURL request to ".curl_getinfo($ch, CURLINFO_EFFECTIVE_URL), Notice::debug);
+    $json_result = curl_exec ($ch);
+    if ($json_result === false) {
+      $this->error("Solr search failed. ".curl_error($ch));
+      echo "Solr search failed. ".curl_error($ch);
+      curl_close($ch);
+      return array(false, false);
+    }
+    $this->message("Solr search returned [".curl_getinfo($ch, CURLINFO_RESPONSE_CODE)."] {$json_result}.", Notice::debug);
+    $result = json_decode($json_result, true); // TODO check
+    curl_close($ch);
+    $page_ids = array();
+    foreach($result['response']['docs'] as $res) $page_ids[] = $res['id'];
+    $this->log->save('search', "Solr search Pages={$pageSelector} Text={$textSelector} Result: ".var_export($result, true));
+    return array($page_ids, $result);
+  }
+
+  /**
+   * Index a PDF document using an internal method
+   * 
+   * @param $pdfPage ProcessWire Page object (the page contains the PDF file field)
+   * @param $task the task object or false if Tasker is not available
+   * @param $taskData task data assoc array
+   * @param $params runtime paramteres, e.g. timeout, dryrun, estimation and task object
+   * @returns false on error, a result message on success
+   * The method also alters elements of the $taskData array.
+   */
+  private function index_internal($pdfPage, $task, &$taskData, $params) {
     // create the pageindex field if it does not exists
     if (!$pdfPage->{$this->pdf_pageindex_field}) {
       // save() should create the missing repeater field
