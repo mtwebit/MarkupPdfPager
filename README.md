@@ -14,9 +14,9 @@ After installing this module you need to install two Javascript libraries.
 
 # How to use the module
 Create...
-* a File field to store a single PDF file
-* (optionally) an Integer field to store page offset info and add this to the PDF File field
-* a template and add the PDF File field
+* a File field to store a single PDF file.
+* (optionally) an Integer field to store page offset info and add this to the PDF File field.
+* a template and add the PDF File field to it.
 
 Install the module and set the file and page offset fields.
 
