@@ -1,0 +1,16 @@
+#pdf-canvas {
+  border: 0px;
+  padding: 0;
+  margin: auto;
+  display: block;
+}
+
+#pdf_text {
+  white-space:pre-wrap;
+}
+
+
+mark{
+    background: blue;
+    color: black;
+}
