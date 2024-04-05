@@ -20,11 +20,11 @@ class MarkupPdfPager extends WireData implements Module {
    * @param $pdfPage ProcessWire Page object (the page contains the PDF file field)
    * @param $searchURL URL to the search page, empty if not supported
    * @param $jumpPage jump to this page upon displaying
-   * @param $scale scale up/down the PDF viewport
+   * @param string $scale scale up/down the PDF viewport
    * @returns HTML sniplet to insert to a page
    * The method also alters elements of the $taskData array.
    */
-  public function renderPdfCanvas($pdfPage, $searchURL = '', $jumpPage = 1, $scale = 1.2) {
+  public function renderPdfCanvas($pdfPage, $searchURL = '', $jumpPage = 1, $scale = '1.2') {
     $this->assetsURL = $this->config->urls->siteModules . 'MarkupPdfPager/assets/';
 
     // check config
