@@ -81,15 +81,16 @@ function renderPage(num) {
       if (element !== null) {
         element.parentNode.removeChild(element);
       }
+
+      var canvasOffset = $(pdf_canvas).offset();
+
       var textLayerDiv = document.createElement("div");
       textLayerDiv.setAttribute("id", "text-layer");
-      textLayerDiv.setAttribute("class", "textLayer");		
-      container.appendChild(textLayerDiv);
-
+      textLayerDiv.setAttribute("class", "textLayer");
       // Fix the position of the text layer to the canvas
-      // var canvas = $("#pdf-canvas"); 
-      // var canvas_offset = canvas.offset();
-      // $("#text-layer").css({ left: (canvas_offset.left ) + 'px' });
+      // textLayerDiv.style.top = canvasOffset.top + 'px';
+      textLayerDiv.style.left = canvasOffset.left + 'px';
+      container.appendChild(textLayerDiv);
 
       // Render the text layer
       page.getTextContent().then(textContent => {
@@ -183,7 +184,7 @@ function onPrevPage() {
   queueRenderPage(pageNum);
   pageRequest(pageNum);
 }
-document.getElementById('prev').addEventListener('click', onPrevPage);
+if (document.getElementById('prev')) document.getElementById('prev').addEventListener('click', onPrevPage);
 
 /**
  * Displays next page.
@@ -194,7 +195,7 @@ function onNextPage() {
   queueRenderPage(pageNum);
   pageRequest(pageNum);
 }
-document.getElementById('next').addEventListener('click', onNextPage);
+if (document.getElementById('next')) document.getElementById('next').addEventListener('click', onNextPage);
 
 
 

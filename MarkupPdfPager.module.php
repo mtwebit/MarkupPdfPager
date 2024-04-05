@@ -45,7 +45,6 @@ class MarkupPdfPager extends WireData implements Module {
     return $markerHtml . "
 
     <canvas id=\"pdf-canvas\"></canvas>
-    <div id=\"text-layer\"></div>
 
     <script type=\"text/javascript\">
       var PDF_URL=\"{$file->url}\";
