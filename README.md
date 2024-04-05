@@ -2,9 +2,9 @@
 An embedded, page-oriented PDF rendering, transformation and indexing tool for Processwire.
 
 # Status, known bugs
-*** WORK IN PROGRESS ***
-* The text layer is not properly aligned with the pdf viewer.
-* Indexing and search are disabled atm. Rework in progress.
+*** This is a half-finished module. ***
+* PDF rendering and paging works.
+* Indexing and search are disabled.
 
 # Installation
 After installing this module you need to install two Javascript libraries.
